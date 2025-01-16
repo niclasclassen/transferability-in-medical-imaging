@@ -12,7 +12,8 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.neighbors import NeighborhoodComponentsAnalysis
 import torch.nn.functional as F
 from sklearn.neighbors import KNeighborsClassifier
-
+from pytorch_metric_learning import losses
+import gc
 
 def _cov(X, shrinkage=-1):
     emp_cov = np.cov(np.asarray(X).T, bias=1)
@@ -573,18 +574,67 @@ def NCTI_Score(X, y):
     print("S_ncc: " + str((sfda_score)))
     return    all_lowfeat_nuc, sfda_score, np.log(class_pred_nuc)
 
-def our_score(X_train, y_train, X_val, y_val):
+def LP_Score(X, y):
 
-    NCA = NeighborhoodComponentsAnalysis(n_components=64, random_state=42)
-    NCA.fit(X_train, y_train)
-    embed_X_train = NCA.transform(X_train)
-    embed_X_val = NCA.transform(X_val)
+    n_components = 50
+    NCA = NeighborhoodComponentsAnalysis(n_components=n_components, random_state=42)
+    NCA.fit(X, y)
+    embed_X = NCA.transform(X)
     
     neigh = KNeighborsClassifier(n_neighbors=5)
-    neigh.fit(embed_X_train, y_train)
-    prob_train = neigh.predict_proba(embed_X_train)
-    prob_val = neigh.predict_proba(embed_X_val)
-    nleep_score_train = np.sum(prob_train[np.arange(X_train.shape[0]), y_train]) / X_train.shape[0]
-    nleep_score_val = np.sum(prob_val[np.arange(X_val.shape[0]), y_val]) / X_val.shape[0]
+    neigh.fit(embed_X, y)
+    prob = neigh.predict_proba(embed_X)
+    LP_score = np.sum(prob[np.arange(X.shape[0]), y]) / X.shape[0]
 
-    return nleep_score_train, nleep_score_val
+    return LP_score
+
+def FU_Score(model, first, second, test_loader, device):
+   seed=42
+   torch.manual_seed(seed)
+   np.random.seed(seed)
+   # for cuda
+   torch.cuda.manual_seed_all(seed)
+   torch.backends.cudnn.deterministic = True
+   torch.backends.cudnn.benchmark = False
+   torch.backends.cudnn.enabled = False
+
+   total_loss = []
+
+   model.to(device)
+   model.eval()
+
+   # Counter for number of batches
+   num_batches = 0
+   triplet_loss = losses.TripletMarginLoss()
+   conv1_grads = []
+   conv2_grads = []
+   # Loop over test data
+   for batch_idx, (inputs, targets) in enumerate(test_loader):
+      inputs, targets = inputs.to(device), torch.squeeze(targets).to(device)
+
+      # Zero the gradients from the previous batch
+      model.zero_grad()
+
+      # Forward pass
+      embeddings = model(inputs)
+
+      # Compute loss
+      loss = triplet_loss(embeddings, targets)
+      total_loss.append(loss.item())
+      # Backward pass to compute gradients
+      loss.backward()
+
+      # Compute L2 norm for the entire 'conv1' layer
+      if first.weight.grad is not None:
+         conv1_grads.append(torch.norm(first.weight.grad, p=2).item())
+      
+      # Compute L2 norm for the entire 'layer1' layer
+      if second.weight.grad is not None:
+         conv2_grads.append(torch.norm(second.weight.grad, p=2).item())
+
+   model.cpu()
+   del model
+   gc.collect()
+   torch.cuda.empty_cache()
+   
+   return np.mean(conv2_grads) / np.mean(conv1_grads)

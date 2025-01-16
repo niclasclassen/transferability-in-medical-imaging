@@ -1,0 +1,17 @@
+name: similarity
+dependencies:
+    - python=3.10
+    - pip
+    - boto3
+    - pip:
+      - torch
+      - torchsampler
+      - torchvision
+      - mlflow>=1.0
+      - tensorboardX
+      - psutil
+      - radt
+      - migedit
+      - opencv-python
+      - medmnist
+

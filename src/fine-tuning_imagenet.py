@@ -3,7 +3,9 @@
 
 import argparse
 parser = argparse.ArgumentParser()
-parser.add_argument('--source_flag', type=str, help='choose RadImageNet, ImageNet or any of the MedMNIST datasets')
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--source_flag', type=str, help='choose densenet, efficientnet, googlenet, inception, mobilenet, vgg, convnext, shufflenet')
 parser.add_argument('--target_flag', type=str, help='choose a MedMNIST')
 parser.add_argument('--batch_size', type=int, help='batch size', default=32)
 parser.add_argument('--epochs', type=int, help='number of epochs', default=30)
@@ -17,6 +19,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import torchvision
+from torchvision import models
 from torchvision.transforms import v2
 from sklearn.metrics import roc_auc_score
 from sklearn.metrics import accuracy_score
@@ -112,12 +115,12 @@ def load_data(source_flag, target_flag):
         v2.RandomAdjustSharpness(sharpness_factor=2),
         v2.RandomAutocontrast(),
         v2.RandomEqualize(),
-        v2.Normalize(mean=[0.485, 0.456, 0.406] if source_flag == 'imagenet' else [.5], std=[0.229, 0.224, 0.225] if source_flag == 'imagenet' else [.5])
+        v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
     
     test_transform = v2.Compose([
         v2.ToTensor(),
-        v2.Normalize(mean=[0.485, 0.456, 0.406] if source_flag == 'imagenet' else [.5], std=[0.229, 0.224, 0.225] if source_flag == 'imagenet' else [.5])
+        v2.Normalize(mean=[0.485, 0.456, 0.406] , std=[0.229, 0.224, 0.225])
     ])
     
     target_data = np.load('/mnt/share/data/medmnist_similarity/' + target_flag +  '_fine-tune_224.npz')
@@ -132,7 +135,7 @@ def load_test_data(source_flag, target_flag):
     # preprocessing
     test_transform = v2.Compose([
         v2.ToTensor(),
-        v2.Normalize(mean=[0.485, 0.456, 0.406] if source_flag == 'imagenet' else [.5], std=[0.229, 0.224, 0.225] if source_flag == 'imagenet' else [.5])
+        v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
     target_data = np.load('/home/doju/.medmnist/' + target_flag +  '_224.npz')
@@ -282,35 +285,39 @@ def fine_tune(source_flag, target_flag, lr, momentum, wd, batch_size, epochs):
 
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-        if source_flag == 'imagenet':
-            net = torchvision.models.resnet18(weights='IMAGENET1K_V1')
-        else:
-            if source_flag == 'medmnist':
-                model_path = '/mnt/share/models/doju_pre-trained_for/'+ target_flag +'.pt'
-                info = INFO[target_flag]
-                if target_flag == 'pneumoniamnist':
-                    source_classes = 69
-                elif target_flag == 'chestmnist':
-                    source_classes = 56
-                else:
-                    source_classes = 69 - len(info['label'])
-                net = torchvision.models.resnet18(num_classes=source_classes)
-                net.load_state_dict(torch.load(model_path, map_location=device), strict=False)
-            elif source_flag == 'radimagenet':
-                model_path = '/mnt/share/models/doju_pre-trained_for/radimagenet.pt'
-                source_classes = 165
-                net = torchvision.models.resnet18(num_classes=source_classes)
-                net.load_state_dict(torch.load(model_path, map_location=device), strict=False)
-            else:
-                model_path = '/mnt/share/models/doju_sim_pretrained/'+ source_flag +'/resnet18_224_1.pth'
-                source_info = INFO[source_flag]
-                source_classes = len(source_info['label'])
-                net = torchvision.models.resnet18(num_classes=source_classes)
-                net.load_state_dict(torch.load(model_path, map_location=device)['net'], strict=False)
-        
-        num_ftrs = net.fc.in_features
-        net.fc = nn.Sequential(nn.Dropout(p=0.5), nn.Linear(num_ftrs, n_classes))
-        #net.fc = nn.Linear(num_ftrs, n_classes)
+        if source_flag == 'densenet':
+            net = torchvision.models.densenet121(weights='IMAGENET1K_V1')
+            num_ftrs = net.classifier.in_features
+            net.classifier = nn.Linear(num_ftrs, n_classes)
+        elif source_flag == 'efficientnet':
+            net = torchvision.models.efficientnet_v2_s(weights='IMAGENET1K_V1')
+            num_ftrs = net.classifier[-1].in_features
+            net.classifier = nn.Linear(num_ftrs, n_classes)
+        elif source_flag == 'googlenet':
+            net = torchvision.models.googlenet(weights='IMAGENET1K_V1')
+            num_ftrs = net.fc.in_features
+            net.fc = nn.Linear(num_ftrs, n_classes)
+        elif source_flag == 'mnasnet':
+            net = torchvision.models.mnasnet1_0(weights='IMAGENET1K_V1')
+            num_ftrs = net.classifier[1].in_features
+            net.classifier[1] = nn.Linear(num_ftrs, n_classes)
+        elif source_flag == 'mobilenet':
+            net = torchvision.models.mobilenet_v3_small(weights='IMAGENET1K_V1')
+            num_ftrs = net.classifier[-1].in_features
+            net.classifier[-1] =nn.Linear(num_ftrs, n_classes)
+        elif source_flag == 'vgg':
+            net = torchvision.models.vgg11(weights='IMAGENET1K_V1')
+            num_ftrs = net.classifier[-1].in_features
+            net.classifier[-1] =nn.Linear(num_ftrs, n_classes)
+        elif source_flag == 'convnext':
+            net = torchvision.models.convnext_tiny(weights='IMAGENET1K_V1')
+            num_ftrs = net.classifier[-1].in_features
+            net.classifier[-1] = nn.Linear(num_ftrs, n_classes)
+        elif source_flag == 'shufflenet':
+            net = torchvision.models.shufflenet_v2_x0_5(weights='IMAGENET1K_V1')
+            num_ftrs = net.fc.in_features
+            net.fc = nn.Linear(num_ftrs, n_classes)
+
         net.to(device)
 
         if task == "multi-label, binary-class":
@@ -335,7 +342,7 @@ def fine_tune(source_flag, target_flag, lr, momentum, wd, batch_size, epochs):
         for key, value in vars(args).items():
             run.log_param(key, value)
         print('==> Building and training model...')
-        path=f'/mnt/share/models/doju_sim_finetuned/{source_flag}_{target_flag}_{lr}_{batch_size}.pt'
+        path=f'/mnt/share/models/doju_sim_finetuned_imnet/{source_flag}_{target_flag}_{lr}_{momentum}_{wd}_{batch_size}.pt'
         early_stopping = EarlyStopping(patience=50, verbose=True, path=path)
         for epoch in range(epochs):  # loop over the dataset multiple times
             train_loss = train_epoch(net, train_loader, task, criterion, optimizer, scheduler, device)
@@ -348,9 +355,38 @@ def fine_tune(source_flag, target_flag, lr, momentum, wd, batch_size, epochs):
                 print("Early stopping")
                 break
         
-        ft_model = torchvision.models.resnet18(num_classes=n_classes)
-        num_ftrs = ft_model.fc.in_features
-        ft_model.fc = nn.Sequential(nn.Dropout(p=0.5), nn.Linear(num_ftrs, n_classes))
+        if source_flag == 'densenet':
+            ft_model = torchvision.models.densenet121(weights='IMAGENET1K_V1')
+            num_ftrs = ft_model.classifier.in_features
+            ft_model.classifier = nn.Linear(num_ftrs, n_classes)
+        elif source_flag == 'efficientnet':
+            ft_model = torchvision.models.efficientnet_v2_s(weights='IMAGENET1K_V1')
+            num_ftrs = ft_model.classifier[-1].in_features
+            ft_model.classifier = nn.Linear(num_ftrs, n_classes)
+        elif source_flag == 'googlenet':
+            ft_model = torchvision.models.googlenet(weights='IMAGENET1K_V1')
+            num_ftrs = ft_model.fc.in_features
+            ft_model.fc = nn.Linear(num_ftrs, n_classes)
+        elif source_flag == 'mnasnet':
+            ft_model = torchvision.models.mnasnet1_0(weights='IMAGENET1K_V1')
+            num_ftrs = ft_model.classifier[1].in_features
+            ft_model.classifier[1] = nn.Linear(num_ftrs, n_classes)
+        elif source_flag == 'mobilenet':
+            ft_model = torchvision.models.mobilenet_v3_small(weights='IMAGENET1K_V1')
+            num_ftrs = ft_model.classifier[-1].in_features
+            ft_model.classifier[-1] =nn.Linear(num_ftrs, n_classes)
+        elif source_flag == 'vgg':
+            ft_model = torchvision.models.vgg11(weights='IMAGENET1K_V1')
+            num_ftrs = ft_model.classifier[-1].in_features
+            ft_model.classifier[-1] =nn.Linear(num_ftrs, n_classes)
+        elif source_flag == 'convnext':
+            ft_model = torchvision.models.convnext_tiny(weights='IMAGENET1K_V1')
+            num_ftrs = ft_model.classifier[-1].in_features
+            ft_model.classifier[-1] = nn.Linear(num_ftrs, n_classes)
+        elif source_flag == 'shufflenet':
+            ft_model = torchvision.models.shufflenet_v2_x0_5(weights='IMAGENET1K_V1')
+            num_ftrs = ft_model.fc.in_features
+            ft_model.fc = nn.Linear(num_ftrs, n_classes)
         ft_model.load_state_dict(torch.load(path))
         ft_model.to(device)
         val_loss, val_auc, val_acc = my_test(ft_model, val_loader, task, criterion, device)
