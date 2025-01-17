@@ -2,7 +2,7 @@
 
 This repository contains the code and results from the paper [*On dataset transferability in medical image classification*](https://arxiv.org/pdf/2412.20172). The study introduces a novel transferability metric that integrates feature quality and gradients to assess the suitability and adaptability of source model features for various target tasks. 
 
-This PyTorch implementation enables the calculation of transferability scores and provides pre-training and fine-tuning scripts for medical image classification tasks, using datasets from [*MedMNIST*](https://medmnist.com/).
+This PyTorch implementation enables the calculation of transferability scores and provides pre-training and fine-tuning scripts for medical image classification tasks, using datasets from [MedMNIST](https://medmnist.com/).
 
 ## Features
 
