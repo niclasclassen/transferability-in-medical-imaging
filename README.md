@@ -11,10 +11,11 @@ This PyTorch implementation enables the calculation of transferability scores an
 - Provides tools for leave-target-out pretraining on MedMNIST, ResNet18 pretraining on [RadImageNet](https://github.com/BMEII-AI/RadImageNet), and fine-tuning models on target tasks from MedMNIST. 
 - Designed specifically for medical imaging datasets.
 
-For access to the data used in the paper, please refer to:
-* [RadImageNet](https://github.com/BMEII-AI/RadImageNet) for pre-trained weights,
-* [NIH CXR14](https://nihcc.app.box.com/v/ChestXray-NIHCC), and
-* [LIDC-IDRI](https://wiki.cancerimagingarchive.net/pages/viewpage.action?pageId=1966254).
+For access to the models and data used in the paper, please refer to:
+* [MedMNIST datasets and pre-trained models](https://medmnist.com/) (we used ResNet18 224x224),
+* [RadImageNet](https://github.com/BMEII-AI/RadImageNet),
+* [Leave-target-out MedMNIST pretraining](https://osf.io/4zgrd/), and
+* [Subsets of MedMNIST datasets used in our paper](https://osf.io/4zgrd/).
 
 ## Setup
 
