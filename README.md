@@ -46,6 +46,7 @@ python -m transferability_scores.py --source <dataset or model> --method <FU | L
 `--source`: Specify `dataset` for dataset transferability or `model` for architecture transferability.
 * Source datasets: 12 datasets from MedMNIST, leave-target-out MedMNIST, RadImageNet, ImageNet
 * Implemented architectures: densenet, efficientnet, googlenet, mnasnet, mobilenet, vgg, convnext, shufflenet, resnet
+  
 `--method`: Choose a transferability metric. Options include:
 * FU or LP proposed in the paper,
 * LEEP, NLEEP, LogME, PARC, SFDA, NCTI.
