@@ -1,0 +1,2 @@
+- Update --method options for calculating transferability scores to lower case in README
+- Fix typo in fine-tuning command in README
