@@ -42,7 +42,7 @@ Replace `<MedMNIST source flag>` and `<MedMNIST target flag>` with the appropria
 
 To compute transferability scores for dataset or model evaluation, run:
 ```bash
-python -m transferability_scores.py --source <dataset or model> --method <FU | LP | LEEP | NLEEP | others>
+python -m transferability_scores.py --source <dataset or model> --method <fu | lp | leep | nleep | others>
 ```
 `--source`: Specify `dataset` for dataset transferability or `model` for architecture transferability.
 * Source datasets: 12 datasets from MedMNIST, leave-target-out MedMNIST, RadImageNet, ImageNet
