@@ -34,7 +34,7 @@ conda activate your-environment-name
 To fine-tune a source model for a target task, use the following command:
 
 ```bash
-python -m fine_tuning.py --source_flag <MedMNIST source flag> --target_flag <MedMNIST target flag> --lr <learning rate> --epochs <number of epochs> --batch_size <batch size>
+python -m fine-tuning.py --source_flag <MedMNIST source flag> --target_flag <MedMNIST target flag> --lr <learning rate> --epochs <number of epochs> --batch_size <batch size>
 ```
 Replace `<MedMNIST source flag>` and `<MedMNIST target flag>` with the appropriate dataset flags from MedMNIST. Adjust learning rate, epochs, and batch size as needed.
 
