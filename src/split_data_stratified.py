@@ -1,4 +1,5 @@
 # python split_data_stratified.py --dataset_name dermamnist --dataset_path ../data/original/dermamnist_224.npz --target_path ../splits/dermamnist_splits.npz
+# TODO: Optimize to use less space. Instead of storing the data per split just store the indices two avoid the same image not being stored several times.
 import argparse
 import numpy as np
 from medmnist import INFO
