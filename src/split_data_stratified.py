@@ -90,6 +90,15 @@ def create_samples(
         np.random.seed(42 + rep)
 
         for split in splits:
+            # avoid unnecessary splitting
+            if split == 100:
+                if rep == 1:
+                    savez_dict[f"train_images_all"] = train_imgs
+                    savez_dict[f"train_labels_all"] = train_labels
+                    savez_dict[f"val_images_all"] = val_imgs
+                    savez_dict[f"val_labels_all"] = val_labels
+                continue
+
             # Sample train
             train_idx = stratified_sample(num_classes, train_labels, split)
             train_imgs_split = train_imgs[train_idx]
