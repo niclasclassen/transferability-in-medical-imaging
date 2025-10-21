@@ -1,5 +1,4 @@
 # python split_data_stratified.py --dataset_name dermamnist --dataset_path ../data/original/dermamnist_224.npz --target_path ../splits/dermamnist_splits.npz
-# TODO: Optimize to use less space. Instead of storing the data per split just store the indices two avoid the same image not being stored several times.
 import argparse
 import numpy as np
 from medmnist import INFO
@@ -77,47 +76,28 @@ def create_samples(
     metadata, data = get_medmnist_data(dataset_name, dataset_path)
     num_classes = len(metadata["label"])
 
-    train_imgs = data["train_images"]
-    train_labels = data["train_labels"]
-    val_imgs = data["val_images"]
-    val_labels = data["val_labels"]
-    test_imgs = data["test_images"]  # keep as-is
-    test_labels = data["test_labels"]  # keep as-is
-
     savez_dict = {}
+
+    # Save original data
+    for key in data.files:
+        savez_dict[key] = data[key]
 
     for rep in range(1, repetitions + 1):
         np.random.seed(42 + rep)
 
         for split in splits:
-            # avoid unnecessary splitting
+
+            # handle 100% edge case. Data already exists
             if split == 100:
-                if rep == 1:
-                    savez_dict[f"train_images_all"] = train_imgs
-                    savez_dict[f"train_labels_all"] = train_labels
-                    savez_dict[f"val_images_all"] = val_imgs
-                    savez_dict[f"val_labels_all"] = val_labels
                 continue
 
-            # Sample train
-            train_idx = stratified_sample(num_classes, train_labels, split)
-            train_imgs_split = train_imgs[train_idx]
-            train_labels_split = train_labels[train_idx]
-
-            # Sample val
-            val_idx = stratified_sample(num_classes, val_labels, split)
-            val_imgs_split = val_imgs[val_idx]
-            val_labels_split = val_labels[val_idx]
+            # Sample indices
+            train_idx = stratified_sample(num_classes, data["train_labels"], split)
+            val_idx = stratified_sample(num_classes, data["val_labels"], split)
 
             # Save splits with keys identifying rep and split
-            savez_dict[f"train_images_run{rep}_split-{split}pct"] = train_imgs_split
-            savez_dict[f"train_labels_run{rep}_split-{split}pct"] = train_labels_split
-            savez_dict[f"val_images_run{rep}_split-{split}pct"] = val_imgs_split
-            savez_dict[f"val_labels_run{rep}_split-{split}pct"] = val_labels_split
-
-    # Save test set as-is (no sampling)
-    savez_dict["test_images"] = test_imgs
-    savez_dict["test_labels"] = test_labels
+            savez_dict[f"train_idx_run{rep}_split-{split}pct"] = train_idx
+            savez_dict[f"val_idx_run{rep}_split-{split}pct"] = val_idx
 
     np.savez(target_path, **savez_dict)
 
