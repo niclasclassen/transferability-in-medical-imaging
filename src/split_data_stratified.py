@@ -2,7 +2,7 @@
 import argparse
 import numpy as np
 from medmnist import INFO
-from typing import List
+from typing import List, Optional
 
 
 def parse_args():
@@ -53,17 +53,35 @@ def get_medmnist_data(dataset_name: str, dataset_path: str):
 
 
 def stratified_sample(
-    num_classes: int, labels: np.ndarray, split_percent: int
-) -> List[int]:
+    num_classes: int,
+    labels: np.ndarray,
+    split_percent: float,
+    available_indices: Optional[np.ndarray] = None,
+    prev_split: Optional[float] = None,
+) -> np.ndarray:
+
     sampled_indices = []
 
+    # If we're subsampling, compute how large a fraction of available_indices we need
+    if available_indices is not None and prev_split is not None:
+        fraction = split_percent / prev_split
+    else:
+        fraction = split_percent / 100.0  # sampling from full dataset
+
     for cls in range(num_classes):
-        cls_indices = np.where(labels == cls)[0]
-        n_samples = max(int(len(cls_indices) * (split_percent / 100)), 1)
+        # Restrict to available indices if provided
+        if available_indices is not None:
+            cls_indices = [i for i in available_indices if labels[i] == cls]
+        else:
+            cls_indices = np.where(labels == cls)[0]
+
+        n_samples = int(len(cls_indices) * fraction)
         chosen = np.random.choice(cls_indices, n_samples, replace=False)
+        if chosen.size == 0:
+            print(f"Warning: class {cls} has zero samples for split {split_percent}%")
         sampled_indices.extend(chosen)
 
-    return sampled_indices
+    return np.array(sampled_indices)
 
 
 def create_samples(
@@ -85,15 +103,41 @@ def create_samples(
     for rep in range(1, repetitions + 1):
         np.random.seed(42 + rep)
 
-        for split in splits:
+        prev_train_idx = None
+        prev_val_idx = None
+        prev_split = None
+
+        for split in sorted(splits, reverse=True):
 
             # handle 100% edge case. Data already exists
             if split == 100:
                 continue
 
-            # Sample indices
-            train_idx = stratified_sample(num_classes, data["train_labels"], split)
-            val_idx = stratified_sample(num_classes, data["val_labels"], split)
+            if prev_train_idx is None:
+                # Largest split: sample from full dataset
+                train_idx = stratified_sample(num_classes, data["train_labels"], split)
+                val_idx = stratified_sample(num_classes, data["val_labels"], split)
+
+            else:
+                # Smaller split: stratified subsample from previous split
+                train_idx = stratified_sample(
+                    num_classes,
+                    data["train_labels"],
+                    split,
+                    prev_train_idx,
+                    prev_split,
+                )
+                val_idx = stratified_sample(
+                    num_classes,
+                    data["val_labels"],
+                    split,
+                    prev_val_idx,
+                    prev_split,
+                )
+
+            prev_train_idx = train_idx
+            prev_val_idx = val_idx
+            prev_split = split
 
             # Save splits with keys identifying rep and split
             savez_dict[f"train_idx_run{rep}_split-{split}pct"] = train_idx
