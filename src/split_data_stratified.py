@@ -31,7 +31,7 @@ def parse_args():
     parser.add_argument(
         "--repetitions",
         type=int,
-        default=3,
+        default=10,
         help="Number of how often the sampling will be repeated.",
     )
     parser.add_argument(
@@ -75,8 +75,9 @@ def stratified_sample(
         else:
             cls_indices = np.where(labels == cls)[0]
 
-        n_samples = int(len(cls_indices) * fraction)
+        n_samples = max(int(len(cls_indices) * fraction), 1)
         chosen = np.random.choice(cls_indices, n_samples, replace=False)
+        # TODO: log warning in a different way
         if chosen.size == 0:
             print(f"Warning: class {cls} has zero samples for split {split_percent}%")
         sampled_indices.extend(chosen)
