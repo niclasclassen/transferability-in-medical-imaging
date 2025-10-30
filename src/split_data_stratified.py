@@ -77,9 +77,6 @@ def stratified_sample(
 
         n_samples = max(int(len(cls_indices) * fraction), 1)
         chosen = np.random.choice(cls_indices, n_samples, replace=False)
-        # TODO: log warning in a different way
-        if chosen.size == 0:
-            print(f"Warning: class {cls} has zero samples for split {split_percent}%")
         sampled_indices.extend(chosen)
 
     return np.array(sampled_indices)
