@@ -4,7 +4,7 @@
 import numpy as np
 import torch
 from scipy import linalg, stats
-from sklearn.mixture import GaussianMixture 
+from sklearn.mixture import GaussianMixture
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from utils import iterative_A
@@ -14,6 +14,7 @@ import torch.nn.functional as F
 from sklearn.neighbors import KNeighborsClassifier
 from pytorch_metric_learning import losses
 import gc
+
 
 def _cov(X, shrinkage=-1):
     emp_cov = np.cov(np.asarray(X).T, bias=1)
@@ -60,7 +61,7 @@ def _class_means(X, y):
 
     means_ = np.zeros(shape=(len(classes), X.shape[1]))
     for i in range(len(classes)):
-        means_[i] = (np.sum(means, axis=0) - means[i]) / (len(classes) - 1)    
+        means_[i] = (np.sum(means, axis=0) - means[i]) / (len(classes) - 1)
     return means, means_
 
 
@@ -69,29 +70,29 @@ def split_data(data: np.ndarray, percent_train: float):
     return data[:split], data[split:]
 
 
-def feature_reduce(features: np.ndarray, f: int=None):
+def feature_reduce(features: np.ndarray, f: int = None):
     """
-        Use PCA to reduce the dimensionality of the features.
-        If f is none, return the original features.
-        If f < features.shape[0], default f to be the shape.
-	"""
+    Use PCA to reduce the dimensionality of the features.
+    If f is none, return the original features.
+    If f < features.shape[0], default f to be the shape.
+    """
     if f is None:
         return features
     if f > features.shape[0]:
         f = features.shape[0]
-    
+
     return PCA(
-        n_components=f,
-        svd_solver='randomized',
-        random_state=1919,
-        iterated_power=1).fit_transform(features)
+        n_components=f, svd_solver="randomized", random_state=1919, iterated_power=1
+    ).fit_transform(features)
 
 
-class TransferabilityMethod:	
-    def __call__(self, 
-        features: np.ndarray, y: np.ndarray,
-                ) -> float:
-        self.features = features		
+class TransferabilityMethod:
+    def __call__(
+        self,
+        features: np.ndarray,
+        y: np.ndarray,
+    ) -> float:
+        self.features = features
         self.y = y
         return self.forward()
 
@@ -100,14 +101,14 @@ class TransferabilityMethod:
 
 
 class PARC(TransferabilityMethod):
-	
-    def __init__(self, n_dims: int=None, fmt: str=''):
+
+    def __init__(self, n_dims: int = None, fmt: str = ""):
         self.n_dims = n_dims
         self.fmt = fmt
 
     def forward(self):
         self.features = feature_reduce(self.features, self.n_dims)
-        
+
         num_classes = len(np.unique(self.y, return_inverse=True)[0])
         labels = np.eye(num_classes)[self.y] if self.y.ndim == 1 else self.y
 
@@ -116,14 +117,14 @@ class PARC(TransferabilityMethod):
     def get_parc_correlation(self, feats1, labels2):
         scaler = StandardScaler()
 
-        feats1  = scaler.fit_transform(feats1)
+        feats1 = scaler.fit_transform(feats1)
 
         rdm1 = 1 - np.corrcoef(feats1)
         rdm2 = 1 - np.corrcoef(labels2)
-        
+
         lt_rdm1 = self.get_lowertri(rdm1)
         lt_rdm2 = self.get_lowertri(rdm2)
-        
+
         return stats.spearmanr(lt_rdm1, lt_rdm2)[0] * 100
 
     def get_lowertri(self, rdm):
@@ -131,12 +132,12 @@ class PARC(TransferabilityMethod):
         return rdm[np.triu_indices(num_conditions, 1)]
 
 
-class SFDA():
+class SFDA:
     def __init__(self, shrinkage=None, priors=None, n_components=None):
         self.shrinkage = shrinkage
         self.priors = priors
         self.n_components = n_components
-        
+
     def _solve_eigen(self, X, y, shrinkage):
         classes, y = np.unique(y, return_inverse=True)
         cnt = np.bincount(y)
@@ -144,7 +145,7 @@ class SFDA():
         np.add.at(means, y, X)
         means /= cnt[:, None]
         self.means_ = means
-                
+
         cov = np.zeros(shape=(X.shape[1], X.shape[1]))
         for idx, group in enumerate(classes):
             Xg = X[y == group, :]
@@ -162,9 +163,9 @@ class SFDA():
             shrinkage = self.shrinkage
         print("Shrinkage: {}".format(shrinkage))
         # between scatter
-        St = _cov(X, shrinkage=self.shrinkage) 
+        St = _cov(X, shrinkage=self.shrinkage)
 
-        # add regularization on within scatter   
+        # add regularization on within scatter
         n_features = Sw.shape[0]
         mu = np.trace(Sw) / n_features
         shrunk_Sw = (1.0 - self.shrinkage) * Sw
@@ -182,13 +183,13 @@ class SFDA():
         )
 
     def fit(self, X, y):
-        '''
+        """
         X: input features, N x D
         y: labels, N
 
-        '''
+        """
         self.classes_ = np.unique(y)
-        #n_samples, _ = X.shape
+        # n_samples, _ = X.shape
         n_classes = len(self.classes_)
 
         max_components = min(len(self.classes_) - 1, X.shape[1])
@@ -204,10 +205,14 @@ class SFDA():
 
         _, y_t = np.unique(y, return_inverse=True)  # non-negative ints
         self.priors_ = np.bincount(y_t) / float(len(y))
-        self._solve_eigen(X, y, shrinkage=self.shrinkage,)
+        self._solve_eigen(
+            X,
+            y,
+            shrinkage=self.shrinkage,
+        )
 
         return self
-    
+
     def transform(self, X):
         # project X onto Fisher Space
         X_new = np.dot(X, self.scalings_)
@@ -226,7 +231,7 @@ def each_evidence(y_, f, fh, v, s, vh, N, D):
     alpha = 1.0
     beta = 1.0
     lam = alpha / beta
-    tmp = (vh @ (f @ np.ascontiguousarray(y_)))
+    tmp = vh @ (f @ np.ascontiguousarray(y_))
     for _ in range(11):
         # should converge after at most 10 steps
         # typically converge after two or three steps
@@ -242,12 +247,14 @@ def each_evidence(y_, f, fh, v, s, vh, N, D):
         if np.abs(new_lam - lam) / lam < 0.01:
             break
         lam = new_lam
-    evidence = D / 2.0 * np.log(alpha) \
-               + N / 2.0 * np.log(beta) \
-               - 0.5 * np.sum(np.log(alpha + beta * s)) \
-               - beta / 2.0 * (beta_de + epsilon) \
-               - alpha / 2.0 * (alpha_de + epsilon) \
-               - N / 2.0 * np.log(2 * np.pi)
+    evidence = (
+        D / 2.0 * np.log(alpha)
+        + N / 2.0 * np.log(beta)
+        - 0.5 * np.sum(np.log(alpha + beta * s))
+        - beta / 2.0 * (beta_de + epsilon)
+        - alpha / 2.0 * (alpha_de + epsilon)
+        - N / 2.0 * np.log(2 * np.pi)
+    )
     return evidence / N, alpha, beta, m
 
 
@@ -266,7 +273,7 @@ def truncated_svd(x):
 class LogME(object):
     def __init__(self, regression=False):
         """
-            :param regression: whether regression
+        :param regression: whether regression
         """
         self.regression = regression
         self.fitted = False
@@ -309,28 +316,28 @@ class LogME(object):
         at https://arxiv.org/abs/2110.10545
         """
         # k = min(N, D)
-        N, D = f.shape  
+        N, D = f.shape
 
         # direct SVD may be expensive
-        if N > D: 
+        if N > D:
             u, s, vh = truncated_svd(f)
         else:
             u, s, vh = np.linalg.svd(f, full_matrices=False)
         # u.shape = N x k, s.shape = k, vh.shape = k x D
         s = s.reshape(-1, 1)
-        sigma = (s ** 2)
+        sigma = s**2
 
         evidences = []
         self.num_dim = y.shape[1] if self.regression else int(y.max() + 1)
         for i in range(self.num_dim):
             y_ = y[:, i] if self.regression else (y == i).astype(np.float64)
             y_ = y_.reshape(-1, 1)
-            
+
             # x has shape [k, 1], but actually x should have shape [N, 1]
-            x = u.T @ y_  
-            x2 = x ** 2
+            x = u.T @ y_
+            x2 = x**2
             # if k < N, we compute sum of xi for 0 singular values directly
-            res_x2 = (y_ ** 2).sum() - x2.sum()  
+            res_x2 = (y_**2).sum() - x2.sum()
 
             alpha, beta = 1.0, 1.0
             for _ in range(11):
@@ -341,21 +348,27 @@ class LogME(object):
                 alpha = gamma / (m2 + 1e-5)
                 beta = (N - gamma) / (res2 + 1e-5)
                 t_ = alpha / beta
-                evidence = D / 2.0 * np.log(alpha) \
-                           + N / 2.0 * np.log(beta) \
-                           - 0.5 * np.sum(np.log(alpha + beta * sigma)) \
-                           - beta / 2.0 * res2 \
-                           - alpha / 2.0 * m2 \
-                           - N / 2.0 * np.log(2 * np.pi)
+                evidence = (
+                    D / 2.0 * np.log(alpha)
+                    + N / 2.0 * np.log(beta)
+                    - 0.5 * np.sum(np.log(alpha + beta * sigma))
+                    - beta / 2.0 * res2
+                    - alpha / 2.0 * m2
+                    - N / 2.0 * np.log(2 * np.pi)
+                )
                 evidence /= N
-                if abs(t_ - t) / t <= 1e-3:  # abs(t_ - t) <= 1e-5 or abs(1 / t_ - 1 / t) <= 1e-5:
+                if (
+                    abs(t_ - t) / t <= 1e-3
+                ):  # abs(t_ - t) <= 1e-5 or abs(1 / t_ - 1 / t) <= 1e-5:
                     break
-            evidence = D / 2.0 * np.log(alpha) \
-                       + N / 2.0 * np.log(beta) \
-                       - 0.5 * np.sum(np.log(alpha + beta * sigma)) \
-                       - beta / 2.0 * res2 \
-                       - alpha / 2.0 * m2 \
-                       - N / 2.0 * np.log(2 * np.pi)
+            evidence = (
+                D / 2.0 * np.log(alpha)
+                + N / 2.0 * np.log(beta)
+                - 0.5 * np.sum(np.log(alpha + beta * sigma))
+                - beta / 2.0 * res2
+                - alpha / 2.0 * m2
+                - N / 2.0 * np.log(2 * np.pi)
+            )
             evidence /= N
             m = 1.0 / (t + sigma) * s * x
             m = (vh.T @ m).reshape(-1)
@@ -367,7 +380,7 @@ class LogME(object):
         return np.mean(evidences)
 
     _fit = _fit_fixed_point
-    #_fit = _fit_icml
+    # _fit = _fit_icml
 
     def fit(self, f: np.ndarray, y: np.ndarray):
         """
@@ -379,7 +392,7 @@ class LogME(object):
         :return: LogME score (how well f can fit y directly)
         """
         if self.fitted:
-            warnings.warn('re-fitting for new data. old parameters cleared.')
+            warnings.warn("re-fitting for new data. old parameters cleared.")
             self.reset()
         else:
             self.fitted = True
@@ -401,87 +414,142 @@ class LogME(object):
         logits = f @ self.ms.T
         if self.regression:
             return logits
-        prob = np.exp(logits) / np.exp(logits).sum(axis=1, keepdims=True)  
+        prob = np.exp(logits) / np.exp(logits).sum(axis=1, keepdims=True)
         # return np.argmax(logits, axis=-1)
         return prob
 
 
-def LEEP(outputs, y):
-    r"""
-    Log Expected Empirical Prediction in `LEEP: A New Measure to
-    Evaluate Transferability of Learned Representations (ICML 2020)
-    <http://proceedings.mlr.press/v119/nguyen20b/nguyen20b.pdf>`_.
-    
-    The LEEP :math:`\mathcal{T}` can be described as:
-
-    .. math::
-        \mathcal{T}=\mathbb{E}\log \left(\sum_{z \in \mathcal{C}_s} \hat{P}\left(y \mid z\right) \theta\left(y \right)_{z}\right)
-
-    where :math:`\theta\left(y\right)_{z}` is the predictions of pre-trained model on source category, :math:`\hat{P}\left(y \mid z\right)` is the empirical conditional distribution estimated by prediction and ground-truth label.
+def LEEP(predictions: torch.Tensor, y: np.ndarray) -> float:
+    """
+    Compute the Log Expected Empirical Prediction (LEEP) score.
 
     Args:
-        predictions (np.ndarray): predictions of pre-trained model.
-        labels (np.ndarray): groud-truth labels.
+        predictions (torch.Tensor): Predicted logits of shape (N, C_s), where N is number of samples and C_s is number of source classes.
+        y (np.ndarray): Ground-truth labels of shape (N,).
 
-    Shape: 
-        - predictions: (N, :math:`C_s`), with number of samples N and source class number :math:`C_s`.
-        - labels: (N, ) elements in [0, :math:`C_t`), with target class number :math:`C_t`.
-        - score: scalar
+    Returns:
+        float: LEEP score indicating the transferability of the pre-trained model to the target task.
     """
-    predictions = F.softmax(outputs, dim=-1).numpy()
-    N, C_s = predictions.shape
-    labels = y.reshape(-1)
-    C_t = int(np.max(labels) + 1)
+    y = np.asarray(y)
+    n_samples, n_source_classes = predictions.shape
+    target_classes = np.unique(y)
+    n_target_classes = len(target_classes)
+    # eps = 1e-12  # to avoid division by zero
 
-    normalized_prob = predictions / float(N)
-    joint = np.zeros((C_t, C_s), dtype=float)  # placeholder for joint distribution over (y, z)
+    # Step 1: Normalize to probability distributions
+    predictions = F.softmax(predictions, dim=-1).numpy()
 
-    for i in range(C_t):
-        this_class = normalized_prob[labels == i]
-        row = np.sum(this_class, axis=0)
-        joint[i] = row
+    # Step 2a: Compute empirical joint distribution P̂(y, z)
+    P_yz = np.zeros((n_target_classes, n_source_classes))
+    for i, c in enumerate(target_classes):
+        mask = y == c  # select all samples with target class c
+        P_yz[i] = predictions[mask].sum(axis=0) / n_samples
 
-    #p_target_given_source = (joint / joint.sum(axis=0, keepdims=True)).T  # P(y | z)
-    #empirical_prediction = predictions @ p_target_given_source
-    # Modfied to handle cases where predictions for some y are 0
-    j_sum = joint.sum(axis=0, keepdims=True)
-    p_target_given_source = np.zeros((joint.shape[0], joint.shape[1]))
-    np.divide(joint,  j_sum , out=p_target_given_source , where=j_sum!=0)
-    empirical_prediction = predictions @ p_target_given_source.T
-    
-    empirical_prob = np.array([predict[label] for predict, label in zip(empirical_prediction, labels)])
-    score = np.mean(np.log(empirical_prob))
+    # Step 2b: Compute marginal distribution P̂(z)
+    P_z = P_yz.sum(axis=0, keepdims=True)
 
-    return score
+    # Step 2c: Compute conditional distribution P̂(y|z)
+    # P_y_given_z = P_yz / (P_z + eps)
+    P_y_given_z = P_yz / (P_z)
+
+    # Step 3: Compute Expected Empirical Predictor (EEP)
+    # For each sample: sum_z P̂(y_i|z) * θ(x_i)_z
+    P_yi = np.zeros(n_samples)
+    for i, c in enumerate(target_classes):
+        mask = y == c
+        P_yi[mask] = np.sum(P_y_given_z[i] * predictions[mask], axis=1)
+
+    # Step 4: Compute the LEEP score
+    # leep_score = np.mean(np.log(P_yi + eps))
+    leep_score = np.mean(np.log(P_yi))
+
+    return leep_score
+
+
+# def LEEP(outputs, y):
+#     r"""
+#     Log Expected Empirical Prediction in `LEEP: A New Measure to
+#     Evaluate Transferability of Learned Representations (ICML 2020)
+#     <http://proceedings.mlr.press/v119/nguyen20b/nguyen20b.pdf>`_.
+
+#     The LEEP :math:`\mathcal{T}` can be described as:
+
+#     .. math::
+#         \mathcal{T}=\mathbb{E}\log \left(\sum_{z \in \mathcal{C}_s} \hat{P}\left(y \mid z\right) \theta\left(y \right)_{z}\right)
+
+#     where :math:`\theta\left(y\right)_{z}` is the predictions of pre-trained model on source category, :math:`\hat{P}\left(y \mid z\right)` is the empirical conditional distribution estimated by prediction and ground-truth label.
+
+#     Args:
+#         predictions (np.ndarray): predictions of pre-trained model.
+#         labels (np.ndarray): groud-truth labels.
+
+#     Shape:
+#         - predictions: (N, :math:`C_s`), with number of samples N and source class number :math:`C_s`.
+#         - labels: (N, ) elements in [0, :math:`C_t`), with target class number :math:`C_t`.
+#         - score: scalar
+#     """
+
+#     predictions = F.softmax(outputs, dim=-1).numpy()
+#     N, C_s = predictions.shape
+#     labels = y.reshape(-1)
+#     C_t = int(np.max(labels) + 1)
+
+#     normalized_prob = predictions / float(N)
+#     joint = np.zeros(
+#         (C_t, C_s), dtype=float
+#     )  # placeholder for joint distribution over (y, z)
+
+#     for i in range(C_t):
+#         this_class = normalized_prob[labels == i]
+#         row = np.sum(this_class, axis=0)
+#         joint[i] = row
+
+#     # p_target_given_source = (joint / joint.sum(axis=0, keepdims=True)).T  # P(y | z)
+#     # empirical_prediction = predictions @ p_target_given_source
+#     # Modfied to handle cases where predictions for some y are 0
+#     j_sum = joint.sum(axis=0, keepdims=True)
+#     p_target_given_source = np.zeros((joint.shape[0], joint.shape[1]))
+#     np.divide(joint, j_sum, out=p_target_given_source, where=j_sum != 0)
+#     empirical_prediction = predictions @ p_target_given_source.T
+
+#     empirical_prob = np.array(
+#         [predict[label] for predict, label in zip(empirical_prediction, labels)]
+#     )
+#     score = np.mean(np.log(empirical_prob))
+
+#     return score
+
 
 def NLEEP(X, y, component_ratio=5):
 
     n = len(y)
     num_classes = len(np.unique(y))
     # PCA: keep 80% energy
+
     pca_80 = PCA(n_components=0.8, random_state=42)
     pca_80.fit(X, y)
     X_pca_80 = pca_80.transform(X)
 
     # GMM: n_components = component_ratio * class number
     n_components_num = component_ratio * num_classes
-    gmm = GaussianMixture(n_components= n_components_num).fit(X_pca_80)
+    gmm = GaussianMixture(n_components=n_components_num).fit(X_pca_80)
     prob = gmm.predict_proba(X_pca_80)  # p(z|x)
 
     # NLEEP
     pyz = np.zeros((num_classes, n_components_num))
     for y_ in range(num_classes):
         indices = np.where(y == y_)[0]
-        filter_ = np.take(prob, indices, axis=0) 
-        pyz[y_] = np.sum(filter_, axis=0) / n   
-    pz = np.sum(pyz, axis=0)    
-    py_z = pyz / pz             
-    py_x = np.dot(prob, py_z.T) 
+        filter_ = np.take(prob, indices, axis=0)
+        pyz[y_] = np.sum(filter_, axis=0) / n
+    pz = np.sum(pyz, axis=0)
+    py_z = pyz / pz
+    py_x = np.dot(prob, py_z.T)
 
     # nleep_score
     nleep_score = np.sum(py_x[np.arange(n), y]) / n
 
     return nleep_score
+
 
 def LogME_Score(X, y, regression=False):
 
@@ -494,24 +562,26 @@ def SFDA_Score(X, y):
 
     n = len(y)
     num_classes = len(np.unique(y))
-    
+
     SFDA_first = SFDA()
     prob = SFDA_first.fit(X, y).predict_proba(X)  # p(y|x)
-    
+
     # soften the probability using softmax for meaningful confidential mixture
-    prob = np.exp(prob) / np.exp(prob).sum(axis=1, keepdims=True) 
+    prob = np.exp(prob) / np.exp(prob).sum(axis=1, keepdims=True)
     means, means_ = _class_means(X, y)  # class means, outer classes means
-    
+
     # ConfMix
     for y_ in range(num_classes):
         indices = np.where(y == y_)[0]
         y_prob = np.take(prob, indices, axis=0)
-        y_prob = y_prob[:, y_]  # probability of correctly classifying x with label y        
-        X[indices] = y_prob.reshape(len(y_prob), 1) * X[indices] + \
-                            (1 - y_prob.reshape(len(y_prob), 1)) * means_[y_]
-    
+        y_prob = y_prob[:, y_]  # probability of correctly classifying x with label y
+        X[indices] = (
+            y_prob.reshape(len(y_prob), 1) * X[indices]
+            + (1 - y_prob.reshape(len(y_prob), 1)) * means_[y_]
+        )
+
     SFDA_second = SFDA(shrinkage=SFDA_first.shrinkage)
-    prob = SFDA_second.fit(X, y).predict_proba(X)   # n * num_cls
+    prob = SFDA_second.fit(X, y).predict_proba(X)  # n * num_cls
 
     # leep = E[p(y|x)]. Note: the log function is ignored in case of instability.
     sfda_score = np.sum(prob[np.arange(n), y]) / n
@@ -519,22 +589,24 @@ def SFDA_Score(X, y):
 
 
 def PARC_Score(X, y, ratio=2):
-    
+
     num_sample, feature_dim = X.shape
     ndims = 32 if ratio > 1 else int(feature_dim * ratio)  # feature reduction dimension
 
     if num_sample > 15000:
         from utils import initLabeled
+
         p = 15000.0 / num_sample
         labeled_index = initLabeled(y, p=p)
         features = X[labeled_index]
         targets = X[labeled_index]
         print("data are sampled to {}".format(features.shape))
 
-    method = PARC(n_dims = ndims)
+    method = PARC(n_dims=ndims)
     parc_score = method(features=X, y=y)
 
     return parc_score
+
 
 def NCTI_Score(X, y):
     C = np.unique(y).shape[0]
@@ -543,44 +615,51 @@ def NCTI_Score(X, y):
     # model_npy_feature = os.path.join('./results_f/group1/pca_feature', f'{args.model}_{args.dataset}_feature.npy')
     # np.save(model_npy_feature, X)
     temp = max(np.exp(-pca.explained_variance_[:32].sum()), 1e-10)
-    print(pca.explained_variance_[:32].sum()/ pca.explained_variance_.sum())
-
-    
+    print(pca.explained_variance_[:32].sum() / pca.explained_variance_.sum())
 
     if temp == 1e-10:
-        clf = LinearDiscriminantAnalysis(solver='svd')
+        clf = LinearDiscriminantAnalysis(solver="svd")
 
     else:
-        clf = LinearDiscriminantAnalysis(solver='eigen', shrinkage=float(temp))
-    
+        clf = LinearDiscriminantAnalysis(solver="eigen", shrinkage=float(temp))
+
     low_feat = clf.fit_transform(X, y)
-    
+
     low_feat = low_feat - np.mean(low_feat, axis=0, keepdims=True)
-    all_lowfeat_nuc = np.linalg.norm(low_feat, ord='nuc')
+    all_lowfeat_nuc = np.linalg.norm(low_feat, ord="nuc")
 
     low_pred = clf.predict_proba(X)
     sfda_score = np.sum(low_pred[np.arange(X.shape[0]), y]) / X.shape[0]
-    print(clf.score(X,y))
+    print(clf.score(X, y))
 
     class_pred_nuc = 0
     class_low_feat = np.zeros((C, 1))
     print(class_low_feat.shape)
     for c in range(C):
-        c_pred = low_pred[(y==c).flatten()]
-        c_pred_nuc = np.linalg.norm(c_pred, ord='nuc')
+        c_pred = low_pred[(y == c).flatten()]
+        c_pred_nuc = np.linalg.norm(c_pred, ord="nuc")
         class_pred_nuc += c_pred_nuc
     print("S_seli: " + str(all_lowfeat_nuc))
     print("S_vc: - " + str((class_pred_nuc)))
     print("S_ncc: " + str((sfda_score)))
-    return    all_lowfeat_nuc, sfda_score, np.log(class_pred_nuc)
+    return all_lowfeat_nuc, sfda_score, np.log(class_pred_nuc)
+
 
 def LP_Score(X, y):
-
+    # # TODO: look into matrix multiplication errors
+    # print("X dtype:", X.dtype)
+    # print("X range:", np.min(X), np.max(X))
+    # print("Mean:", np.mean(X))
+    # print("Std:", np.std(X))
+    # print("Zero-variance columns:", np.sum(np.var(X, axis=0) == 0))
+    # X = X.astype(np.float64)
+    # X = StandardScaler().fit_transform(X)
+    # print("After scaling dtype:", X.dtype)
     n_components = 50
     NCA = NeighborhoodComponentsAnalysis(n_components=n_components, random_state=42)
     NCA.fit(X, y)
     embed_X = NCA.transform(X)
-    
+
     neigh = KNeighborsClassifier(n_neighbors=5)
     neigh.fit(embed_X, y)
     prob = neigh.predict_proba(embed_X)
@@ -588,53 +667,55 @@ def LP_Score(X, y):
 
     return LP_score
 
+
 def FU_Score(model, first, second, test_loader, device):
-   seed=42
-   torch.manual_seed(seed)
-   np.random.seed(seed)
-   # for cuda
-   torch.cuda.manual_seed_all(seed)
-   torch.backends.cudnn.deterministic = True
-   torch.backends.cudnn.benchmark = False
-   torch.backends.cudnn.enabled = False
+    # TODO: look into matrix multiplication errors
+    seed = 42
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    # for cuda
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.enabled = False
 
-   total_loss = []
+    total_loss = []
 
-   model.to(device)
-   model.eval()
+    model.to(device)
+    model.eval()
 
-   # Counter for number of batches
-   num_batches = 0
-   triplet_loss = losses.TripletMarginLoss()
-   conv1_grads = []
-   conv2_grads = []
-   # Loop over test data
-   for batch_idx, (inputs, targets) in enumerate(test_loader):
-      inputs, targets = inputs.to(device), torch.squeeze(targets).to(device)
+    # Counter for number of batches
+    num_batches = 0
+    triplet_loss = losses.TripletMarginLoss()
+    conv1_grads = []
+    conv2_grads = []
+    # Loop over test data
+    for batch_idx, (inputs, targets) in enumerate(test_loader):
+        inputs, targets = inputs.to(device), torch.squeeze(targets).to(device)
 
-      # Zero the gradients from the previous batch
-      model.zero_grad()
+        # Zero the gradients from the previous batch
+        model.zero_grad()
 
-      # Forward pass
-      embeddings = model(inputs)
+        # Forward pass
+        embeddings = model(inputs)
 
-      # Compute loss
-      loss = triplet_loss(embeddings, targets)
-      total_loss.append(loss.item())
-      # Backward pass to compute gradients
-      loss.backward()
+        # Compute loss
+        loss = triplet_loss(embeddings, targets)
+        total_loss.append(loss.item())
+        # Backward pass to compute gradients
+        loss.backward()
 
-      # Compute L2 norm for the entire 'conv1' layer
-      if first.weight.grad is not None:
-         conv1_grads.append(torch.norm(first.weight.grad, p=2).item())
-      
-      # Compute L2 norm for the entire 'layer1' layer
-      if second.weight.grad is not None:
-         conv2_grads.append(torch.norm(second.weight.grad, p=2).item())
+        # Compute L2 norm for the entire 'conv1' layer
+        if first.weight.grad is not None:
+            conv1_grads.append(torch.norm(first.weight.grad, p=2).item())
 
-   model.cpu()
-   del model
-   gc.collect()
-   torch.cuda.empty_cache()
-   
-   return np.mean(conv2_grads) / np.mean(conv1_grads)
+        # Compute L2 norm for the entire 'layer1' layer
+        if second.weight.grad is not None:
+            conv2_grads.append(torch.norm(second.weight.grad, p=2).item())
+
+    model.cpu()
+    del model
+    gc.collect()
+    torch.cuda.empty_cache()
+
+    return np.mean(conv2_grads) / np.mean(conv1_grads)
