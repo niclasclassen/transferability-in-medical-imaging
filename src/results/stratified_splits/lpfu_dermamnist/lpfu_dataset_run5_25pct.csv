@@ -1,0 +1,11 @@
+index,source,dermamnist
+0,bloodmnist,0.08447132546967683
+1,breastmnist,0.17219453878555557
+2,octmnist,1.0
+3,organamnist,0.0
+4,organcmnist,0.0
+5,organsmnist,0.012408751640491529
+6,pathmnist,0.12239706245676715
+7,pneumoniamnist,0.014462015547826335
+8,retinamnist,0.0744002766336064
+9,tissuemnist,0.16243949622344617
