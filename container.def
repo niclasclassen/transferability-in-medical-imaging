@@ -1,0 +1,32 @@
+
+Bootstrap: docker
+From: nvidia/cuda:12.6.0-cudnn-runtime-ubuntu24.04
+
+%labels
+    Author YourName
+    Version v1.1
+    Description "Singularity container with PyTorch (CUDA 12.4), PyTorch Geometric, Hugging Face, scikit-learn on Ubuntu 24.04"
+
+%post
+    apt-get update && apt-get install -y \
+        python3 python3-pip python3-dev git wget curl \
+        && rm -rf /var/lib/apt/lists/*
+
+    # Upgrade pip safely (allow installs into system Python)
+    # python3 -m pip install --upgrade pip --break-system-packages
+
+    # Install CUDA-enabled PyTorch (CUDA 12.6 example)
+    pip install torch --index-url https://download.pytorch.org/whl/cu126 --break-system-packages
+
+    # other python libraries
+    pip install medmnist scikit-learn numpy tqdm radt pillow --break-system-packages
+
+
+%environment
+    export LC_ALL=C.UTF-8
+    export LANG=C.UTF-8
+    export PATH=/usr/local/bin:$PATH
+    export PYTHONPATH=/usr/local/lib/python3.12/dist-packages:$PYTHONPATH
+
+%runscript
+    exec python3 "$@"
